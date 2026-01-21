@@ -7,6 +7,17 @@ P.name = "AudioFileをオブジェクトに変換"
 -- 数値が小さいほど先に実行されます
 P.priority = 1000
 
+-- 設定項目
+P.settings = {
+    -- 設定項目の例
+    use_alt_key = true,  -- Altキーを押下したときのみ有効にする
+    set_character_id = {
+        switch = false,
+        splitstr = "_" -- ファイル名からキャラクターIDを設定する際の区切り文字
+    },  -- キャラクターIDをファイル名に設定する
+}
+-- 設定項目
+
 P.audio_exts = {
     "m4a",
     "wav",
@@ -41,7 +52,7 @@ function P.drop(files, state)
         local ext = file.filepath:match("[^.]+$"):lower()
         local is_audio = false
         for key, value in pairs(P.audio_exts) do
-            if ext == value and state.alt then
+            if ext == value and (not P.settings.use_alt_key or state.alt) then
                 is_audio = true
                 break
             end
@@ -56,6 +67,16 @@ function P.drop(files, state)
             duration_sec = info.total_time
         end
         local frame = duration_sec * (data.rate / data.scale)
+        local text = file.filepath:match("([^/\\]+)$"):gsub("%.[^%.]+$", "")
+        if P.settings.set_character_id.switch then
+            local parts = {}
+            for part in string.gmatch(text, "([^" .. P.settings.set_character_id.splitstr .. "]+)") do
+                table.insert(parts, part)
+            end
+            if #parts > 0 then
+                text = table.concat(parts, " ", 2)  -- 2番目以降をセリフテキストにする
+            end
+        end
         local obj = [[
 [0]
 layer=0
@@ -79,7 +100,7 @@ group=1
 [1.0]
 effect.name=セリフ準備@PSDToolKit
 キャラクターID=file_name_0
-テキスト=]] .. file.filepath:match("([^/\\]+)$"):gsub("%.[^%.]+$", "") .. "\r\n" .. [[
+テキスト=]] .. text .. "\r\n" .. [[
 音声ファイル=]] .. file.filepath .. "\r\n" .. [[
 [1.1]
 effect.name=標準描画

@@ -12,6 +12,8 @@ P.exts = {
     "midi"
 }
 
+local ini = require("ini")
+
 function P.drag_enter(files, state)
     -- ドラッグ開始時の処理
     for index, file in ipairs(files) do
@@ -31,203 +33,128 @@ end
 
 local midi = require("midi")
 
+-- LuaJIT は Lua5.1 互換のため bit32 が無い。bit ライブラリを使う。
+local bit = bit or require("bit")
+
 local function midi_duration(path)
-  local tempos = { {tick = 0, bpm = 120} }  -- デフォルトBPM
-  local trackTicks = {}
-  local division
-  local curTrack, curTick = 0, 0
+    local tempos = { { tick = 0, bpm = 120 } } -- デフォルトBPM
+    local trackTicks = {}
+    local division
+    local curTrack, curTick = 0, 0
 
-  local f = assert(io.open(path, "rb"))
-  midi.process(f, function(ev, a1, a2, a3)
-    if ev == "header" then division = select(3, a1, a2, a3) -- division を取得
-    elseif ev == "track" then curTrack, curTick = a1, 0
-    elseif ev == "deltatime" then curTick = curTick + a1
-    elseif ev == "setTempo" then
-      if curTrack == 1 then  -- テンポトラック前提
-        table.insert(tempos, {tick = curTick, bpm = a1})
-      end
-    elseif ev == "endOfTrack" then
-      trackTicks[curTrack] = curTick
+    local f = assert(io.open(path, "rb"))
+    midi.process(f, function(ev, a1, a2, a3)
+        if ev == "header" then
+            division = select(3, a1, a2, a3) -- division を取得
+        elseif ev == "track" then
+            curTrack, curTick = a1, 0
+        elseif ev == "deltatime" then
+            curTick = curTick + a1
+        elseif ev == "setTempo" then
+            if curTrack == 1 then -- テンポトラック前提
+                table.insert(tempos, { tick = curTick, bpm = a1 })
+            end
+        elseif ev == "endOfTrack" then
+            trackTicks[curTrack] = curTick
+        end
+    end)
+    f:close()
+
+    local maxTick = 0
+    for _, t in pairs(trackTicks) do if t > maxTick then maxTick = t end end
+    if not division then return nil, "division missing" end
+
+    table.sort(tempos, function(x, y) return x.tick < y.tick end)
+
+    local function ticks_to_seconds(maxTick, tempos, division)
+        if division < 0 then
+            -- SMPTE timing: division is a signed 16-bit value
+            local div16 = bit.band(division, 0xFFFF)
+            local fps = -bit.rshift(div16, 8)
+            local ticksPerFrame = bit.band(div16, 0xFF)
+            return maxTick / (fps * ticksPerFrame)
+        end
+        local tpq = division
+        local sec = 0
+        for i = 1, #tempos do
+            local t0 = tempos[i].tick
+            local t1 = tempos[i + 1] and tempos[i + 1].tick or maxTick
+            if t1 > t0 then
+                local usPerQ = 60e6 / tempos[i].bpm
+                sec = sec + (t1 - t0) * usPerQ / (1e6 * tpq)
+            end
+        end
+        return sec
     end
-  end)
-  f:close()
 
-  local maxTick = 0
-  for _, t in pairs(trackTicks) do if t > maxTick then maxTick = t end end
-  if not division then return nil, "division missing" end
-
-  table.sort(tempos, function(x, y) return x.tick < y.tick end)
-
-  local function ticks_to_seconds(maxTick, tempos, division)
-    if division < 0 then
-      local fps = -bit32.rshift(division, 8)
-      local ticksPerFrame = bit32.band(division, 0xFF)
-      return maxTick / (fps * ticksPerFrame)
-    end
-    local tpq = division
-    local sec = 0
-    for i = 1, #tempos do
-      local t0 = tempos[i].tick
-      local t1 = tempos[i + 1] and tempos[i + 1].tick or maxTick
-      if t1 > t0 then
-        local usPerQ = 60e6 / tempos[i].bpm
-        sec = sec + (t1 - t0) * usPerQ / (1e6 * tpq)
-      end
-    end
-    return sec
-  end
-
-  return ticks_to_seconds(maxTick, tempos, division)
+    return ticks_to_seconds(maxTick, tempos, division)
 end
 
+local function round(n)
+    n = tonumber(n) or 0
+    if n >= 0 then
+        return math.floor(n + 0.5)
+    end
+    return math.ceil(n - 0.5)
+end
+
+
 function P.drop(files, state)
+    local remaining_files = {}
     for index, file in ipairs(files) do
         local ext = file.filepath:match("[^.]+$"):lower()
-        local is_audio = false
+        local is_midi = false
         for key, value in pairs(P.exts) do
             if ext == value then
-                is_audio = true
+                is_midi = true
                 break
             end
         end
-        if not is_audio then
-            return false
-        end
-        local data = gcmz.get_project_data()
-        local total_time = midi_duration(file.filepath)
-        local duration_sec = 1
-        if total_time then
-            duration_sec = total_time
-        end
-        local frame = duration_sec * (data.rate / data.scale)
-        local obj = [[
-[Object]
-frame=0,]] .. frame.. "\r\n" .. [[
-]]
-        if not state.alt then
-obj = obj .. [[
-[Object.0]
-effect.name=External Audio Processing 2 MIDI Visualizer
-MIDI File=]] .. file.filepath .. "\r\n" .. [[
-幅=1280
-高さ=720
-背景色=000000
-背景透明度=100
-方向=上から下
-挙動=通過
-拡大率=100
-位置=0
-最小キー=0
-最大キー=127
-自動調整=1
-サイズ(手動)=12
-同期.hide=1
-オフセット=0.00
-BPMの同期=同期しない
-BPM(手動)=120.0
-分子(手動)=4
-分母(手動)=4
-速度=1.0
-フィルタ.hide=1
-チャンネル=0
-最小強度=0
-ドラムを無効=0
-ノートを描画=1
-カラーモード=虹色
-基本色=00ff00
-角の半径=2
-グラデーション=1
-余白=1
-縁.hide=1
-縁を描画=0
-縁幅=1
-縁色=ffffff
-ノートの不透明度=100
-キーボード=1
-キーボード幅=40
-黒鍵割合=0.65
-LED位置=85
-LEDサイズ=60
-LED不透明度=75
-グリッド色=ffffff
-グリッド幅=1
-キーグリッド=1
-ビートグリッド=0
-沈み込み=0
-波紋サイズ=0
-波紋時間=1.00
-パーティクル量=10
-パーティクル時間=0.50
-MIDI_DATA=66383965376538392d383731332d343866662d383434392d66666566343865336336343800000000
-LAST_MIDI_PATH=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-[Object.1]
-effect.name=標準描画
-X=0.00
-Y=0.00
-Z=0.00
-Group=1
-中心X=0.00
-中心Y=0.00
-中心Z=0.00
-X軸回転=0.00
-Y軸回転=0.00
-Z軸回転=0.00
-拡大率=100.000
-縦横比=0.000
-透明度=0.00
-合成モード=通常
-]]
-else
-obj = obj .. [[
-[Object.0]
-effect.name=External Audio Processing 2 (Media)
-プラグイン=
-BPM=120.00
-分子=4
-分母=4
-プラグインGUIを表示=0
-Show Param List=0
-Learn Param=0
-Reset Mapping=
-Map 1=-1
-Param 1=0.0
-Map 2=-1
-Param 2=0.0
-Map 3=-1
-Param 3=0.0
-Map 4=-1
-Param 4=0.0
-Recv ID=0
-MIDI File=]] .. file.filepath .. "\r\n" .. [[
-BPMの同期=同期しない
-INSTANCE_ID=34653634633064302d396630332d343866382d383030632d62343665613963353562343700000000
-LAST_RECV_DATA=ffffffff
-LAST_PLUGIN_DATA=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-LAST_MIDI_DATA=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-[Object.1]
-effect.name=音声再生
-音量=100.00
-左右=0.00
-]]
-        end
-        debug_print(obj)
-        table.remove(files, index)
-        local temp_path = gcmz.create_temp_file("mid2obj_" .. index .. ".object")
-        local temp_file = io.open(temp_path, "w")
-        if temp_file then
-            temp_file:write(obj)
-            temp_file:close()
+        if not is_midi then
+            -- 対象外はスキップ
+            remaining_files[#remaining_files + 1] = file
         else
-            debug_print("一時ファイルの作成に失敗しました: " .. temp_path)
-            return false
+            -- 応答停止を避けるため、1ファイルだけ処理してすぐ返す
+            local data = gcmz.get_project_data()
+            local total_time = midi_duration(file.filepath)
+            local duration_sec = 1
+            if total_time then
+                duration_sec = total_time
+            end
+            local frame = round(duration_sec * (data.rate / data.scale))
+            local obj = ini.new()
+            obj:set("Object", "layer", "0")
+            obj:set("Object", "frame", "0," .. tostring(frame))
+
+            if not state.alt then
+                obj:set("Object.0", "effect.name", "External Audio Processing 2 MIDI Visualizer")
+                obj:set("Object.0", "MIDI File", file.filepath)
+                obj:set("Object.1", "effect.name", "標準描画")
+            else
+                obj:set("Object.0", "effect.name", "External Audio Processing 2 (Media)")
+                obj:set("Object.0", "MIDI File", file.filepath)
+                obj:set("Object.1", "effect.name", "音声再生")
+            end
+
+            local temp_path = gcmz.create_temp_file("mid2obj_" .. index .. ".object")
+            local temp_file = io.open(temp_path, "w")
+            if temp_file then
+                temp_file:write(tostring(obj))
+                temp_file:close()
+            else
+                debug_print("一時ファイルの作成に失敗しました: " .. temp_path)
+                return false
+            end
+            -- ファイルに何か処理を行う
+            remaining_files[#remaining_files + 1] = {
+                filepath = temp_path,
+                mimetype = "",
+                temporary = true
+            }
         end
-        -- ファイルに何か処理を行う
-        table.insert(files, {
-            filepath = temp_path,
-            mimetype = "",
-            temporary = true  -- 一時ファイルとしてマーク
-        })
-        return true
+    end
+    for i = 1, #remaining_files do
+        files[i] = remaining_files[i]
     end
     return false
 end

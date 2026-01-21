@@ -10,11 +10,11 @@ P.priority = 1000
 -- 設定項目
 P.settings = {
     -- 設定項目の例
-    use_alt_key = true,  -- Altキーを押下したときのみ有効にする
+    use_alt_key = true, -- Altキーを押下したときのみ有効にする
     set_character_id = {
         switch = false,
         splitstr = "_" -- ファイル名からキャラクターIDを設定する際の区切り文字
-    },  -- キャラクターIDをファイル名に設定する
+    },                 -- キャラクターIDをファイル名に設定する
 }
 -- 設定項目
 
@@ -35,9 +35,12 @@ P.audio_exts = {
 
 function P.drag_enter(files, state)
     -- ドラッグ開始時の処理
-    for _, file in ipairs(files) do
-        if file.filepath:sub(-4):lower() == ".wav" then
-            return true
+    for index, file in ipairs(files) do
+        local ext = file.filepath:match("[^.]+$"):lower()
+        for key, value in pairs(P.audio_exts) do
+            if ext == value then
+                return true
+            end
         end
     end
     return false
@@ -74,13 +77,13 @@ function P.drop(files, state)
                 table.insert(parts, part)
             end
             if #parts > 0 then
-                text = table.concat(parts, " ", 2)  -- 2番目以降をセリフテキストにする
+                text = table.concat(parts, " ", 2) -- 2番目以降をセリフテキストにする
             end
         end
         local obj = [[
 [0]
 layer=0
-frame=0,]] .. frame.. "\r\n" .. [[
+frame=0,]] .. frame .. "\r\n" .. [[
 group=1
 [0.0]
 effect.name=音声ファイル
@@ -135,7 +138,7 @@ Z軸回転=0.00
         table.insert(files, {
             filepath = temp_path,
             mimetype = "",
-            temporary = true  -- 一時ファイルとしてマーク
+            temporary = true -- 一時ファイルとしてマーク
         })
         return true
     end

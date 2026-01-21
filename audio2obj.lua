@@ -1,5 +1,31 @@
 local P = {}
 
+local ini = require("ini")
+
+local function round(n)
+    n = tonumber(n) or 0
+    if n >= 0 then
+        return math.floor(n + 0.5)
+    end
+    return math.ceil(n - 0.5)
+end
+
+local function basename_without_ext(path)
+    local name = tostring(path or ""):match("([^/\\]+)$") or ""
+    return (name:gsub("%.[^%.]+$", ""))
+end
+
+local function is_audio_file(filepath)
+    local ext = tostring(filepath or ""):match("[^.]+$")
+    ext = ext and ext:lower() or ""
+    for _, value in ipairs(P.audio_exts) do
+        if ext == value then
+            return true
+        end
+    end
+    return false
+end
+
 -- ハンドラー名（必須）
 P.name = "AudioFileをオブジェクトに変換"
 
@@ -51,96 +77,101 @@ function P.drag_leave()
 end
 
 function P.drop(files, state)
-    for index, file in ipairs(files) do
-        local ext = file.filepath:match("[^.]+$"):lower()
-        local is_audio = false
-        for key, value in pairs(P.audio_exts) do
-            if ext == value and (not P.settings.use_alt_key or state.alt) then
-                is_audio = true
-                break
-            end
-        end
-        if not is_audio then
-            return false
-        end
-        local data = gcmz.get_project_data()
-        local info = gcmz.get_media_info(file.filepath)
-        local duration_sec = 1
-        if info and info.total_time then
-            duration_sec = info.total_time
-        end
-        local frame = duration_sec * (data.rate / data.scale)
-        local text = file.filepath:match("([^/\\]+)$"):gsub("%.[^%.]+$", "")
-        if P.settings.set_character_id.switch then
-            local parts = {}
-            for part in string.gmatch(text, "([^" .. P.settings.set_character_id.splitstr .. "]+)") do
-                table.insert(parts, part)
-            end
-            if #parts > 0 then
-                text = table.concat(parts, " ", 2) -- 2番目以降をセリフテキストにする
-            end
-        end
-        local obj = [[
-[0]
-layer=0
-frame=0,]] .. frame .. "\r\n" .. [[
-group=1
-[0.0]
-effect.name=音声ファイル
-再生位置=0.000
-再生速度=100.00
-ファイル=]] .. file.filepath .. "\r\n" .. [[
-トラック=0
-ループ再生=0
-[0.1]
-effect.name=音声再生
-音量=100.00
-左右=0.00
-[1]
-layer=1
-frame=0,]] .. frame .. "\r\n" .. [[
-group=1
-[1.0]
-effect.name=セリフ準備@PSDToolKit
-キャラクターID=file_name_0
-テキスト=]] .. text .. "\r\n" .. [[
-音声ファイル=]] .. file.filepath .. "\r\n" .. [[
-[1.1]
-effect.name=標準描画
-描画.hide=1
-X=0.00
-Y=0.00
-Z=0.00
-Group=1
-中心X=0.00
-中心Y=0.00
-中心Z=0.00
-X軸回転=0.00
-Y軸回転=0.00
-Z軸回転=0.00
-拡大率=100.000
-縦横比=0.000
-透明度=0.00
-合成モード=通常
-]]
-        debug_print(obj)
-        table.remove(files, index)
-        local temp_path = gcmz.create_temp_file("wav2obj_" .. index .. ".object")
-        local temp_file = io.open(temp_path, "w")
-        if temp_file then
-            temp_file:write(obj)
-            temp_file:close()
-        else
-            debug_print("一時ファイルの作成に失敗しました: " .. temp_path)
-            return false
-        end
-        -- ファイルに何か処理を行う
-        table.insert(files, {
-            filepath = temp_path,
-            mimetype = "",
-            temporary = true -- 一時ファイルとしてマーク
-        })
+    if P.settings.use_alt_key and not state.alt then
+        return false
     end
+
+    local data = gcmz.get_project_data()
+    local obj = ini.new()
+
+    local totalframes = 0
+    local obj_idx = 0
+    local group_idx = 1
+    local converted_any = false
+    local remaining_files = {}
+
+    for _, file in ipairs(files) do
+        if is_audio_file(file.filepath) then
+            converted_any = true
+
+            local info = gcmz.get_media_info(file.filepath)
+            local duration_sec = 1
+            if info and info.total_time then
+                duration_sec = info.total_time
+            end
+
+            local length_frames = round(duration_sec * (data.rate / data.scale))
+            if length_frames < 1 then
+                length_frames = 1
+            end
+            local start_frame = totalframes
+            local end_frame = totalframes + length_frames - 1
+
+            local text = basename_without_ext(file.filepath)
+            if P.settings.set_character_id.switch then
+                local parts = {}
+                for part in string.gmatch(text, "([^" .. P.settings.set_character_id.splitstr .. "]+)") do
+                    parts[#parts + 1] = part
+                end
+                if #parts > 1 then
+                    text = table.concat(parts, " ", 2)
+                end
+            end
+
+            -- 音声
+            obj:set(tostring(obj_idx), "layer", "0")
+            obj:set(tostring(obj_idx), "frame", tostring(start_frame) .. "," .. tostring(end_frame))
+            obj:set(tostring(obj_idx), "group", tostring(group_idx))
+            obj:set(tostring(obj_idx) .. ".0", "effect.name", "音声ファイル")
+            obj:set(tostring(obj_idx) .. ".0", "ファイル", tostring(file.filepath))
+            obj:set(tostring(obj_idx) .. ".1", "effect.name", "音声再生")
+            obj_idx = obj_idx + 1
+
+            -- セリフ準備
+            obj:set(tostring(obj_idx), "layer", "1")
+            obj:set(tostring(obj_idx), "frame", tostring(start_frame) .. "," .. tostring(end_frame))
+            obj:set(tostring(obj_idx), "group", tostring(group_idx))
+            obj:set(tostring(obj_idx) .. ".0", "effect.name", "セリフ準備@PSDToolKit")
+            obj:set(tostring(obj_idx) .. ".0", "キャラクターID", "file_name_0")
+            obj:set(tostring(obj_idx) .. ".0", "テキスト", tostring(text))
+            obj:set(tostring(obj_idx) .. ".0", "音声ファイル", tostring(file.filepath))
+            obj:set(tostring(obj_idx) .. ".1", "effect.name", "標準描画")
+            obj_idx = obj_idx + 1
+
+            totalframes = end_frame + 1
+            group_idx = group_idx + 1
+        else
+            remaining_files[#remaining_files + 1] = file
+        end
+    end
+
+    if not converted_any then
+        return false
+    end
+    local temp_path = gcmz.create_temp_file("wav2obj.object")
+    local temp_file = io.open(temp_path, "wb")
+    if not temp_file then
+        debug_print("一時ファイルの作成に失敗しました: " .. temp_path)
+        return false
+    end
+    temp_file:write(tostring(obj))
+    temp_file:close()
+
+    -- 音声ファイルを除外し、生成 object を追加
+    remaining_files[#remaining_files + 1] = {
+        filepath = temp_path,
+        mimetype = "",
+        temporary = true
+    }
+
+    -- files を置き換え（音声ファイルは削除済み）
+    for i = 1, #remaining_files do
+        files[i] = remaining_files[i]
+    end
+    for i = #remaining_files + 1, #files do
+        files[i] = nil
+    end
+
     return true
 end
 

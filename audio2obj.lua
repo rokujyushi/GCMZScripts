@@ -1,10 +1,10 @@
 local P = {}
 
--- ƒnƒ“ƒhƒ‰[–¼i•K{j
-P.name = "AudioFile‚ğƒIƒuƒWƒFƒNƒg‚É•ÏŠ·"
+-- ãƒãƒ³ãƒ‰ãƒ©ãƒ¼åï¼ˆå¿…é ˆï¼‰
+P.name = "AudioFileã‚’ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã«å¤‰æ›"
 
--- —Dæ“xiÈ—ª‚Í 1000j
--- ”’l‚ª¬‚³‚¢‚Ù‚Çæ‚ÉÀs‚³‚ê‚Ü‚·
+-- å„ªå…ˆåº¦ï¼ˆçœç•¥æ™‚ã¯ 1000ï¼‰
+-- æ•°å€¤ãŒå°ã•ã„ã»ã©å…ˆã«å®Ÿè¡Œã•ã‚Œã¾ã™
 P.priority = 1000
 
 P.audio_exts = {
@@ -23,7 +23,7 @@ P.audio_exts = {
 }
 
 function P.drag_enter(files, state)
-    -- ƒhƒ‰ƒbƒOŠJn‚Ìˆ—
+    -- ãƒ‰ãƒ©ãƒƒã‚°é–‹å§‹æ™‚ã®å‡¦ç†
     for _, file in ipairs(files) do
         if file.filepath:sub(-4):lower() == ".wav" then
             return true
@@ -33,7 +33,7 @@ function P.drag_enter(files, state)
 end
 
 function P.drag_leave()
-    -- ƒhƒ‰ƒbƒO‚ªƒ^ƒCƒ€ƒ‰ƒCƒ“‚©‚ç—£‚ê‚½‚Æ‚«‚Ìˆ—
+    -- ãƒ‰ãƒ©ãƒƒã‚°ãŒã‚¿ã‚¤ãƒ ãƒ©ã‚¤ãƒ³ã‹ã‚‰é›¢ã‚ŒãŸã¨ãã®å‡¦ç†
 end
 
 function P.drop(files, state)
@@ -41,7 +41,7 @@ function P.drop(files, state)
         local ext = file.filepath:match("[^.]+$"):lower()
         local is_audio = false
         for key, value in pairs(P.audio_exts) do
-            if ext == value then
+            if ext == value and state.alt then
                 is_audio = true
                 break
             end
@@ -62,50 +62,50 @@ layer=0
 frame=0,]] .. frame .. [[
 group=1
 [0.0]
-effect.name=‰¹ºƒtƒ@ƒCƒ‹
-Ä¶ˆÊ’u=0.000
-Ä¶‘¬“x=100.00
-ƒtƒ@ƒCƒ‹=]] .. file.filepath .. [[
-ƒgƒ‰ƒbƒN=0
-ƒ‹[ƒvÄ¶=0
+effect.name=éŸ³å£°ãƒ•ã‚¡ã‚¤ãƒ«
+å†ç”Ÿä½ç½®=0.000
+å†ç”Ÿé€Ÿåº¦=100.00
+ãƒ•ã‚¡ã‚¤ãƒ«=]] .. file.filepath .. [[
+ãƒˆãƒ©ãƒƒã‚¯=0
+ãƒ«ãƒ¼ãƒ—å†ç”Ÿ=0
 [0.1]
-effect.name=‰¹ºÄ¶
-‰¹—Ê=100.00
-¶‰E=0.00
+effect.name=éŸ³å£°å†ç”Ÿ
+éŸ³é‡=100.00
+å·¦å³=0.00
 [1]
 layer=1
 frame=0,]] .. frame .. [[
 group=1
 [1.0]
-effect.name=ƒZƒŠƒt€”õ@PSDToolKit
-ƒLƒƒƒ‰ƒNƒ^[ID=file_name_0
-ƒeƒLƒXƒg=]] .. file.filepath:match("[^/\\]+$"):match(".+[^.]$") .. [[
-‰¹ºƒtƒ@ƒCƒ‹=]] .. file.filepath .. [[
+effect.name=ã‚»ãƒªãƒ•æº–å‚™@PSDToolKit
+ã‚­ãƒ£ãƒ©ã‚¯ã‚¿ãƒ¼ID=file_name_0
+ãƒ†ã‚­ã‚¹ãƒˆ=]] .. file.filepath:match("[^/\\]+$"):match(".+[^.]$") .. [[
+éŸ³å£°ãƒ•ã‚¡ã‚¤ãƒ«=]] .. file.filepath .. [[
 [1.1]
-effect.name=•W€•`‰æ
-•`‰æ.hide=1
+effect.name=æ¨™æº–æç”»
+æç”».hide=1
 X=0.00
 Y=0.00
 Z=0.00
 Group=1
-’†SX=0.00
-’†SY=0.00
-’†SZ=0.00
-X²‰ñ“]=0.00
-Y²‰ñ“]=0.00
-Z²‰ñ“]=0.00
-Šg‘å—¦=100.000
-c‰¡”ä=0.000
-“§–¾“x=0.00
-‡¬ƒ‚[ƒh=’Êí
+ä¸­å¿ƒX=0.00
+ä¸­å¿ƒY=0.00
+ä¸­å¿ƒZ=0.00
+Xè»¸å›è»¢=0.00
+Yè»¸å›è»¢=0.00
+Zè»¸å›è»¢=0.00
+æ‹¡å¤§ç‡=100.000
+ç¸¦æ¨ªæ¯”=0.000
+é€æ˜åº¦=0.00
+åˆæˆãƒ¢ãƒ¼ãƒ‰=é€šå¸¸
 ]]
         table.remove(files, key)
         local temp_path = gcmz.create_temp_file("wav2obj.object")
-        -- ƒtƒ@ƒCƒ‹‚É‰½‚©ˆ—‚ğs‚¤
+        -- ãƒ•ã‚¡ã‚¤ãƒ«ã«ä½•ã‹å‡¦ç†ã‚’è¡Œã†
         table.insert(files, {
             filepath = temp_path,
             mimetype = "",
-            temporary = true  -- ˆêƒtƒ@ƒCƒ‹‚Æ‚µ‚Äƒ}[ƒN
+            temporary = true  -- ä¸€æ™‚ãƒ•ã‚¡ã‚¤ãƒ«ã¨ã—ã¦ãƒãƒ¼ã‚¯
         })
         return true
     end

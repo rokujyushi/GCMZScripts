@@ -37,7 +37,7 @@ function P.drag_leave()
 end
 
 function P.drop(files, state)
-    for _, file in ipairs(files) do
+    for index, file in ipairs(files) do
         local ext = file.filepath:match("[^.]+$"):lower()
         local is_audio = false
         for key, value in pairs(P.audio_exts) do
@@ -59,13 +59,13 @@ function P.drop(files, state)
         local obj = [[
 [0]
 layer=0
-frame=0,]] .. frame .. [[
+frame=0,]] .. frame.. "\r\n" .. [[
 group=1
 [0.0]
 effect.name=音声ファイル
 再生位置=0.000
 再生速度=100.00
-ファイル=]] .. file.filepath .. [[
+ファイル=]] .. file.filepath .. "\r\n" .. [[
 トラック=0
 ループ再生=0
 [0.1]
@@ -74,13 +74,13 @@ effect.name=音声再生
 左右=0.00
 [1]
 layer=1
-frame=0,]] .. frame .. [[
+frame=0,]] .. frame .. "\r\n" .. [[
 group=1
 [1.0]
 effect.name=セリフ準備@PSDToolKit
 キャラクターID=file_name_0
-テキスト=]] .. file.filepath:match("[^/\\]+$"):match(".+[^.]$") .. [[
-音声ファイル=]] .. file.filepath .. [[
+テキスト=]] .. file.filepath:match("([^/\\]+)$"):gsub("%.[^%.]+$", "") .. "\r\n" .. [[
+音声ファイル=]] .. file.filepath .. "\r\n" .. [[
 [1.1]
 effect.name=標準描画
 描画.hide=1
@@ -99,8 +99,17 @@ Z軸回転=0.00
 透明度=0.00
 合成モード=通常
 ]]
-        table.remove(files, key)
+        debug_print(obj)
+        table.remove(files, index)
         local temp_path = gcmz.create_temp_file("wav2obj.object")
+        local temp_file = io.open(temp_path, "w")
+        if temp_file then
+            temp_file:write(obj)
+            temp_file:close()
+        else
+            debug_print("一時ファイルの作成に失敗しました: " .. temp_path)
+            return false
+        end
         -- ファイルに何か処理を行う
         table.insert(files, {
             filepath = temp_path,

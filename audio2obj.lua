@@ -125,7 +125,7 @@ Z軸回転=0.00
 ]]
         debug_print(obj)
         table.remove(files, index)
-        local temp_path = gcmz.create_temp_file("wav2obj.object")
+        local temp_path = gcmz.create_temp_file("wav2obj_" .. index .. ".object")
         local temp_file = io.open(temp_path, "w")
         if temp_file then
             temp_file:write(obj)
@@ -140,9 +140,8 @@ Z軸回転=0.00
             mimetype = "",
             temporary = true -- 一時ファイルとしてマーク
         })
-        return true
     end
-    return false
+    return true
 end
 
 return P

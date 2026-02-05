@@ -14,3 +14,8 @@
   Altキーを押下しながらドロップしたmidiファイルからExternal Audio Processing 2 (Media)オブジェクトのobjectファイルを生成する。  
   再生時間が一番長いトラックに合わせてオブジェクトの長さが設定される
   [ハリボテプラグイン](https://github.com/rokujyushi/Haribote) を導入してください。
+- ## svg2obj.lua
+  ### 概要
+  ドロップしたSVGファイルからSVGオブジェクトのobjectファイルを生成する。  
+  filesからSVGファイルを除きobjectファイルを追加した状態になる
+  [svg.aux2プラグイン](https://github.com/sevenc-nanashi/svg.aux2) を導入してください。

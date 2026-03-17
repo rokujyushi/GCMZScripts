@@ -5,3 +5,4 @@ json.lua
 midi2EAP2.lua
 midi.lua
 !/midi2EAP2/*.lua
+.github/*

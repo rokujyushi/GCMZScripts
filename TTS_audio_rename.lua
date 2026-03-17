@@ -33,7 +33,6 @@ local function exists(path)
         return true
     end
     return false
-    
 end
 
 local function basename_without_ext(path)
@@ -73,20 +72,14 @@ local function find_matching_text_file(files, path)
             return file.filepath, file
         end
     end
-
-    local txt_path = replace_extension(path, ".txt")
-    if txt_path and exists(txt_path) then
-        return txt_path
-    end
-
     return nil
 end
 
-local function search_txt(files,path)
+local function search_txt(files, path)
     return find_matching_text_file(files, path) ~= nil
 end
 
-local function get_txt_file_name(files,path)
+local function get_txt_file_name(files, path)
     return find_matching_text_file(files, path)
 end
 
